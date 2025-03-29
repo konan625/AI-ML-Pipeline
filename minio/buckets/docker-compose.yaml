@@ -1,0 +1,16 @@
+#version: "3.7" # this is the docker compose file version
+
+services: #defines the services(container) to run
+  minio: #name of the service/container
+    image: minio/minio:latest #uses the official minio docker image
+    container_name: minio #name of container
+    ports:
+      - "9000:9000" # exposes minio's s3 api port used for file operrations
+      - "9001:9001" #exposes mnio's web consolde port for management
+    environment: # setting env variables for minio
+      -MINIO_ROOT_USER: minioadmin #credentials for minio
+      -MINIO_ROOT_PASSWORD: minioadmin #credentials for minio
+    volumes:
+      - ./data:/data #persistent storage for minio , maps the local data folder to the container's /data directory
+    command: server /data --console-address ":9001" #starts minio in server mode with the console on port 9001
+    restart: always #ensures the container restarts if it crashes
