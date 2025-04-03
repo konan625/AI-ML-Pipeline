@@ -8,7 +8,7 @@ WORKDIR /app
 COPY requirements.txt .
 
 #Install python dependencies inside the container, --no-cache-dir flag ensures no chached files are stores, reducing the image size
-RUN pip install --no-chache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 #This copies all the files from your locak model folder into the /app directory in the container
 COPY . .
