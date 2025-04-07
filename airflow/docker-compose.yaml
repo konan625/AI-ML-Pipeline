@@ -1,0 +1,9 @@
+version: '3.7'
+
+x-airflow-common:
+ &airflow-common
+ image: apache/airflow:2.7.3
+ environment:
+  &airflow-common-env
+  AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+  AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: 
