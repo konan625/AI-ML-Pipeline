@@ -1,9 +1,79 @@
 version: '3.7'
 
 x-airflow-common:
- &airflow-common
- image: apache/airflow:2.7.3
- environment:
-  &airflow-common-env
-  AIRFLOW__CORE__EXECUTOR: CeleryExecutor
-  AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: 
+  &airflow-common
+  image: apache/airflow:2.7.3
+  environment:
+    &airflow-common-env
+    AIRFLOW__CORE__EXECUTOR: CeleryExecutor #uses celery (a task queue system) to distribute tasks.
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow #connects airflow to postgresql for storing metadata
+    AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
+    AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0 #uses redis to manage task messages
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false' #disables example workflows (keeps the ui clean)
+    AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth' #enables simple username/password login
+  volumes: #this maps local folders into docker containers
+    - ./dags:/opt/airflow/dags #your workflow dags are stored here
+    - ./plugins:/opt/airflow/plugins # custom plugins/extension go here
+  user: "${AIRFLOW_UID:-50000}:${AIRFLOW_GID:-50000}" #sets the user id inside the container default:50000
+  depends_on: #service dependencies
+    redis: #must be healthy before airflow starts
+      condition: service_healthy
+    postgres: #must be healthy before airflow starts
+      condition: service_healthy
+
+services: #services containers
+  postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 5s
+      retries: 5
+    volumes:
+      - postgres-db-volume:/var/lib/postgresql/data
+
+  redis:
+    image: redis:latest
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 30s
+      retries: 50
+
+  airflow-webserver: # provides the airflow ui 
+    <<: *airflow-common
+    command: webserver
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    restart: always
+
+  airflow-scheduler: #scedules and triggers DAGs
+    <<: *airflow-common
+    command: scheduler
+    restart: always
+
+  airflow-worker: #executes tasks using celery executor
+    <<: *airflow-common
+    command: celery worker
+    restart: always
+
+  airflow-init: #initailises teh database and creates the admin user
+    <<: *airflow-common
+    command: version
+    environment:
+      <<: *airflow-common-env
+      _AIRFLOW_DB_UPGRADE: 'true'
+      _AIRFLOW_WWW_USER_CREATE: 'true'
+      _AIRFLOW_WWW_USER_USERNAME: airflow
+      _AIRFLOW_WWW_USER_PASSWORD: airflow
+
+volumes:
+  postgres-db-volume:

@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minio
+spec:
+  replicas: 1 #runs 1 copy (pod) of MinIO
+  selector:
+    matchLabels:
+      app: minio #Tells Kubernetes which pods belong to this deployment
+  template:
+    metadata:
+      labels:
+        app: minio # Labels the pod
+    spec:
+      containers:
+        - name: minio
+          image: minio/minio:latest #uses the minio docker image
+          args:
+            - server
+            - /data #stores data inside the container at /data
+            - --console-address
+            - ":9001" #web ui runs on port 9001
+            env :
+            - name: MINIO_ROOT_USER
+              value: "minioadmin" #default username
+            - name: MINIO_ROOT_PASSWORD
+              value: "minioadmin" #default password
+            ports:
+            - containerPort: 9000 #API port (for apps to connect)
+            - containerPort: 9001 #Web dashboard port
+            volumeMounts:
+            - name: minio-storage
+              mountPath: /data #where data is stored
+          volumes:
+          - name: minio-storage
+            emptyDir: {} #Temporary storage (data is lost if pod restarts)
+#What the above code part does? -> creates 1 running instance (replicas: 1) of MinIO, Uses the official minio/minio Docker image, Sets default credentials (minioadmin/minioadmin), Exposes 2 ports -> 9000: for API access , 9001: for web dashboard, Uses emptyDir for storage (temporary, not persistent)
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio
+spec:
+  selector:
+    app: minio #Links this service to the MinIO deployment
+  ports:
+  - name: api
+    port: 9000 #External port(inside kubernetes)
+    targetPort: 9000 #port inside the minio container
+  - name: console
+    port: 9001 #external port
+    targetPort: 9001 # port inside the container
+  type: NodePort #Makes minio accessible from outside the cluster
+
+#Services (makes minio accessible)
+#What the above code part does? -> creates a network service to access MinIO, NodePort makes MinIO available at: http://<your-server-ip>:30000 (API , port 9000 mapped to a random high port like 30000). http://<your-server-ip>:30001 (dashboard, port 9001 mapped to 30001)
